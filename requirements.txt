@@ -3,3 +3,5 @@ msgspec
 loguru
 rich
 numpy
+pyyaml
+ayafileio

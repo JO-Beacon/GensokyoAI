@@ -7,7 +7,7 @@ from enum import Enum
 
 import ollama
 import numpy as np
-import aiofiles
+import ayafileio
 
 from .types import SemanticMemory
 from ..core.config import MemoryConfig
@@ -24,7 +24,7 @@ class SemanticMode(Enum):
 
 
 class SimpleVectorStore:
-    """简单的向量存储（支持异步）"""
+    """简单的向量存储（使用 ayafileio 实现真异步）"""
 
     def __init__(self, path: Path):
         self.path = path
@@ -42,13 +42,35 @@ class SimpleVectorStore:
                 logger.warning(f"加载向量存储失败: {e}")
                 self._data = []
 
+    async def _load_async(self) -> None:
+        """异步加载"""
+        if self.path.exists():
+            try:
+                async with ayafileio.open(self.path, "r", encoding="utf-8") as f:
+                    content = await f.read()
+                    self._data = json.loads(content)
+            except Exception as e:
+                logger.warning(f"异步加载向量存储失败: {e}")
+                self._data = []
+
+    def _save_sync(self) -> None:
+        """同步保存"""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump(self._data, f, ensure_ascii=False, indent=2)
+
     async def _save_async(self) -> None:
         """异步保存"""
         async with self._lock:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            async with aiofiles.open(self.path, "w", encoding="utf-8") as f:
+            async with ayafileio.open(self.path, "w", encoding="utf-8") as f:
                 content = json.dumps(self._data, ensure_ascii=False, indent=2)
                 await f.write(content)
+
+    def add(self, item: dict) -> None:
+        """同步添加"""
+        self._data.append(item)
+        self._save_sync()
 
     async def add_async(self, item: dict) -> None:
         """异步添加"""
