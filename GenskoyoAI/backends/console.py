@@ -24,16 +24,16 @@ class ConsoleBackend(BaseBackend):
         self._running = False
         self._use_stream = True
         self.console = RichConsole()
-        
+
         # 初始化命令解析器
         self.cmd_parser = CommandParser(mode="smart")
         self.cmd_handler = CommandHandler(self.cmd_parser)
-        
+
         # 注册命令处理器（可扩展！）
         self._register_system_commands()
         self._register_chat_commands()
         self._register_prompt_commands()
-        
+
         # 颜色配置
         self.colors = {
             "user": "bold green",
@@ -45,12 +45,12 @@ class ConsoleBackend(BaseBackend):
             "cmd": "bold cyan",
             "prompt": "bold magenta",
         }
-        
+
         # 累积的提示词上下文
         self._prompt_context: list[str] = []
 
     # ==================== 命令注册（可扩展） ====================
-    
+
     def _register_system_commands(self) -> None:
         """注册系统命令"""
         self.cmd_handler.register("exit", self._cmd_exit, CommandType.SYSTEM)
@@ -62,7 +62,7 @@ class ConsoleBackend(BaseBackend):
         self.cmd_handler.register("help", self._cmd_help, CommandType.SYSTEM)
         self.cmd_handler.register("stream", self._cmd_stream, CommandType.SYSTEM)
         self.cmd_handler.register("clear", self._cmd_clear, CommandType.SYSTEM)
-    
+
     def _register_chat_commands(self) -> None:
         """注册聊天命令"""
         self.cmd_handler.register("think", self._cmd_think, CommandType.CHAT)
@@ -70,7 +70,7 @@ class ConsoleBackend(BaseBackend):
         self.cmd_handler.register("ooc", self._cmd_ooc, CommandType.CHAT)
         self.cmd_handler.register("describe", self._cmd_describe, CommandType.CHAT)
         self.cmd_handler.register("action", self._cmd_action, CommandType.CHAT)
-    
+
     def _register_prompt_commands(self) -> None:
         """注册提示词命令"""
         self.cmd_handler.register("know", self._cmd_know, CommandType.PROMPT)
@@ -79,34 +79,34 @@ class ConsoleBackend(BaseBackend):
         self.cmd_handler.register("metadata", self._cmd_meta, CommandType.PROMPT)
         self.cmd_handler.register("attention", self._cmd_attention, CommandType.PROMPT)
         self.cmd_handler.register("tips", self._cmd_attention, CommandType.PROMPT)
-    
+
     def register_command(
         self,
         name: str,
         handler: Callable,
         cmd_type: CommandType = CommandType.CUSTOM,
         aliases: list[str] | None = None,
-        description: str = ""
+        description: str = "",
     ) -> "ConsoleBackend":
         """注册自定义命令（可扩展接口）
-        
+
         Example:
-            backend.register_command("moon", lambda cmd: get_moon_phase(), 
+            backend.register_command("moon", lambda cmd: get_moon_phase(),
                                    CommandType.CHAT, ["月相"], "查询月相")
         """
         # 注册到解析器
         self.cmd_parser.register_tag(name, aliases, cmd_type, description, handler)
         self.cmd_parser.register_prefix(name, aliases, cmd_type, description, handler)
-        
+
         # 注册到处理器
         self.cmd_handler.register(name, handler, cmd_type)
-        for alias in (aliases or []):
+        for alias in aliases or []:
             self.cmd_handler.register(alias, handler, cmd_type)
-        
+
         return self
 
     # ==================== 系统命令处理器 ====================
-    
+
     def _cmd_help(self, cmd: ParsedCommand) -> str:
         """显示帮助"""
         help_text = f"""
@@ -158,8 +158,10 @@ class ConsoleBackend(BaseBackend):
         """新会话命令"""
         session = self.agent.create_session()
         self._prompt_context.clear()  # 清空提示词上下文
-        self._print_success_message(f"已创建新会话: {format_session_id(session.session_id)}")
-        if greeting := safe_get(self.agent.config, 'character.greeting'):
+        self._print_success_message(
+            f"已创建新会话: {format_session_id(session.session_id)}"
+        )
+        if greeting := safe_get(self.agent.config, "character.greeting"):
             self._print_assistant_message(greeting)
         return ""
 
@@ -200,7 +202,7 @@ class ConsoleBackend(BaseBackend):
         return ""
 
     # ==================== 聊天命令处理器 ====================
-    
+
     def _cmd_think(self, cmd: ParsedCommand) -> str:
         """内心独白"""
         if content := cmd.get_text():
@@ -232,13 +234,15 @@ class ConsoleBackend(BaseBackend):
         return ""
 
     # ==================== 提示词命令处理器 ====================
-    
+
     def _cmd_know(self, cmd: ParsedCommand) -> str:
         """知识/参考资料"""
         if content := cmd.get_text():
             self._prompt_context.append(f"【参考资料】\n{content}")
             self._print_success_message(f"已添加参考资料 ({len(content)} 字符)")
-            self.console.print(f"[dim]📚 {content[:100]}{'...' if len(content) > 100 else ''}[/]")
+            self.console.print(
+                f"[dim]📚 {content[:100]}{'...' if len(content) > 100 else ''}[/]"
+            )
         return ""
 
     def _cmd_meta(self, cmd: ParsedCommand) -> str:
@@ -246,7 +250,9 @@ class ConsoleBackend(BaseBackend):
         if content := cmd.get_text():
             self._prompt_context.append(f"【场景设定】\n{content}")
             self._print_success_message(f"已添加场景设定 ({len(content)} 字符)")
-            self.console.print(f"[dim]🎬 {content[:100]}{'...' if len(content) > 100 else ''}[/]")
+            self.console.print(
+                f"[dim]🎬 {content[:100]}{'...' if len(content) > 100 else ''}[/]"
+            )
         return ""
 
     def _cmd_attention(self, cmd: ParsedCommand) -> str:
@@ -254,14 +260,16 @@ class ConsoleBackend(BaseBackend):
         if content := cmd.get_text():
             self._prompt_context.append(f"【重要提醒】\n{content}")
             self._print_success_message(f"已添加提醒 ({len(content)} 字符)")
-            self.console.print(f"[bold yellow]⚠️ {content[:100]}{'...' if len(content) > 100 else ''}[/]")
+            self.console.print(
+                f"[bold yellow]⚠️ {content[:100]}{'...' if len(content) > 100 else ''}[/]"
+            )
         return ""
 
     def _build_prompt_with_context(self, user_message: str) -> str:
         """构建带提示词上下文的完整消息"""
         if not self._prompt_context:
             return user_message
-        
+
         context_text = "\n\n".join(self._prompt_context[-5:])  # 最多保留5条
         return f"{context_text}\n\n【用户消息】\n{user_message}"
 
@@ -271,16 +279,16 @@ class ConsoleBackend(BaseBackend):
         """启动"""
         self._running = True
         logger.info("控制台后端已启动")
-        
+
         self._show_welcome_panel()
-        
-        if greeting := safe_get(self.agent.config, 'character.greeting'):
+
+        if greeting := safe_get(self.agent.config, "character.greeting"):
             self._print_assistant_message(greeting)
 
     def _show_welcome_panel(self) -> None:
         """显示欢迎面板"""
-        character_name = safe_get(self.agent.config, 'character.name', 'Unknown')
-        
+        character_name = safe_get(self.agent.config, "character.name", "Unknown")
+
         panel_content = Text()
         panel_content.append("幻想乡 AI 角色扮演引擎\n", style="bold magenta")
         panel_content.append(f"当前角色: {character_name}\n", style="cyan")
@@ -292,31 +300,33 @@ class ConsoleBackend(BaseBackend):
         panel_content.append("输入 ", style="dim")
         panel_content.append("<cmd>help</cmd> ", style="bold cyan")
         panel_content.append("查看所有命令\n", style="dim")
-        
-        self.console.print(Panel(panel_content, title="✨ 欢迎 ✨", border_style="magenta"))
+
+        self.console.print(
+            Panel(panel_content, title="✨ 欢迎 ✨", border_style="magenta")
+        )
 
     def _show_sessions_panel(self, sessions: list) -> None:
         """显示会话列表面板"""
         if not sessions:
             self.console.print("[dim]没有历史会话[/]")
             return
-        
+
         panel_content = Text()
         panel_content.append("历史会话\n", style="bold cyan")
-        
+
         sorted_sessions = sorted(sessions, key=lambda s: s.created_at, reverse=True)
-        
+
         for sess in sorted_sessions:
             session_id_short = format_session_id(sess.session_id)
             created_str = format_datetime(sess.created_at)
             status = "●" if sess.is_active else "○"
             status_color = "green" if sess.is_active else "dim"
-            
+
             panel_content.append(f"  {status} ", style=status_color)
             panel_content.append(f"{session_id_short}", style="bold white")
             panel_content.append(f" - {created_str} ", style="dim")
             panel_content.append(f"({sess.total_turns} 轮)\n", style="yellow")
-        
+
         self.console.print(Panel(panel_content, title="会话列表", border_style="cyan"))
 
     async def send(self, message: str) -> str:
@@ -326,16 +336,16 @@ class ConsoleBackend(BaseBackend):
 
         # 处理命令
         results, clean_text = await self.cmd_handler.handle(message)
-        
+
         # 检查是否有退出命令
         if "__EXIT__" in results:
             return "__EXIT__"
-        
+
         # 显示命令处理结果
         for result in results:
             if result and result != "__EXIT__":
                 self.console.print(result)
-        
+
         # 如果没有纯文本内容，不发送给 AI
         if not clean_text:
             return ""
@@ -344,7 +354,7 @@ class ConsoleBackend(BaseBackend):
         full_message = self._build_prompt_with_context(clean_text)
 
         # 正常发送消息
-        if self._use_stream and safe_get(self.agent.config, 'model.stream', True):
+        if self._use_stream and safe_get(self.agent.config, "model.stream", True):
             response = await self._send_stream(full_message)
         else:
             response = await self._send_non_stream(full_message)
@@ -355,8 +365,8 @@ class ConsoleBackend(BaseBackend):
         """流式发送并显示"""
         full_response = ""
         first_chunk = True
-        
-        character_name = safe_get(self.agent.config, 'character.name', 'Assistant')
+
+        character_name = safe_get(self.agent.config, "character.name", "Assistant")
 
         try:
             async for chunk in self.agent.send_stream(message):
@@ -364,10 +374,15 @@ class ConsoleBackend(BaseBackend):
                     self._print_tool_call_indicator(chunk.tool_info)
                 else:
                     if first_chunk:
-                        self.console.print(f"\n[{self.colors['assistant']}]{character_name}: [/]", end="")
+                        self.console.print(
+                            f"\n[{self.colors['assistant']}]{character_name}: [/]",
+                            end="",
+                        )
                         first_chunk = False
-                    
-                    self.console.print(chunk.content, end="", style=self.colors['assistant'])
+
+                    self.console.print(
+                        chunk.content, end="", style=self.colors["assistant"]
+                    )
                     full_response += chunk.content
 
                     if self._stream_handler:
@@ -376,7 +391,7 @@ class ConsoleBackend(BaseBackend):
         except Exception as e:
             logger.error(f"流式输出错误: {e}")
             error_msg = f"[错误] {e}"
-            self.console.print(f"\n{error_msg}", style=self.colors['error'])
+            self.console.print(f"\n{error_msg}", style=self.colors["error"])
             if not full_response:
                 full_response = error_msg
 
@@ -387,15 +402,17 @@ class ConsoleBackend(BaseBackend):
 
     async def _send_non_stream(self, message: str) -> str:
         """非流式发送并显示"""
-        character_name = safe_get(self.agent.config, 'character.name', 'Assistant')
-        
-        self.console.print(f"\n[{self.colors['assistant']}]{character_name}: [/]", end="")
+        character_name = safe_get(self.agent.config, "character.name", "Assistant")
+
+        self.console.print(
+            f"\n[{self.colors['assistant']}]{character_name}: [/]", end=""
+        )
         self.console.print("思考中...", style="dim", end="\r")
-        
+
         response = await self.agent.send(message)
-        
+
         self.console.print(f"[{self.colors['assistant']}]{character_name}: [/]", end="")
-        self.console.print(response, style=self.colors['assistant'])
+        self.console.print(response, style=self.colors["assistant"])
 
         if self._stream_handler:
             self._stream_handler(response)
@@ -404,9 +421,11 @@ class ConsoleBackend(BaseBackend):
 
     def _print_assistant_message(self, message: str) -> None:
         """打印助手消息"""
-        character_name = safe_get(self.agent.config, 'character.name', 'Assistant')
+        character_name = safe_get(self.agent.config, "character.name", "Assistant")
         self.console.print()
-        self.console.print(f"[{self.colors['assistant']}]{character_name}: [/]{message}")
+        self.console.print(
+            f"[{self.colors['assistant']}]{character_name}: [/]{message}"
+        )
 
     def _print_system_message(self, message: str, style: str = "system") -> None:
         """打印系统消息"""
@@ -429,8 +448,8 @@ class ConsoleBackend(BaseBackend):
         if message := tool_info.get("message"):
             if hasattr(message, "tool_calls"):
                 tool_names = [
-                    tc.function.name 
-                    for tc in message.tool_calls 
+                    tc.function.name
+                    for tc in message.tool_calls
                     if hasattr(tc, "function")
                 ]
                 if tool_names:
@@ -458,8 +477,10 @@ class ConsoleBackend(BaseBackend):
     async def run_interactive(self) -> None:
         """运行交互式对话循环"""
         await self.start()
-        
-        self.console.print("[dim]💡 输入 [/][bold cyan]<cmd>help</cmd>[/] [dim]查看所有命令[/]")
+
+        self.console.print(
+            "[dim]💡 输入 [/][bold cyan]<cmd>help</cmd>[/] [dim]查看所有命令[/]"
+        )
 
         try:
             while self._running:
@@ -470,7 +491,7 @@ class ConsoleBackend(BaseBackend):
                         continue
 
                     result = await self.send(user_input)
-                    
+
                     if result == "__EXIT__":
                         break
 
@@ -487,34 +508,34 @@ class ConsoleBackend(BaseBackend):
 
 class ConsoleBackendBuilder:
     """控制台后端构建器 - 用于链式配置"""
-    
+
     def __init__(self, agent: Agent):
         self._backend = ConsoleBackend(agent)
-    
+
     def with_stream_mode(self, enabled: bool = True) -> "ConsoleBackendBuilder":
         self._backend.set_stream_mode(enabled)
         return self
-    
+
     def with_stream_handler(self, handler: Callable) -> "ConsoleBackendBuilder":
         self._backend.set_stream_handler(handler)
         return self
-    
+
     def with_color_theme(self, theme: dict[str, str]) -> "ConsoleBackendBuilder":
         for element, color in theme.items():
             self._backend.set_color(element, color)
         return self
-    
+
     def register_command(
         self,
         name: str,
         handler: Callable,
         cmd_type: CommandType = CommandType.CUSTOM,
         aliases: list[str] | None = None,
-        description: str = ""
+        description: str = "",
     ) -> "ConsoleBackendBuilder":
         """注册自定义命令"""
         self._backend.register_command(name, handler, cmd_type, aliases, description)
         return self
-    
+
     def build(self) -> ConsoleBackend:
         return self._backend

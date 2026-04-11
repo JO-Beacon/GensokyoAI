@@ -1,4 +1,4 @@
-"""Agent 主类"""
+"""Agent 主类 - 异步优化版"""
 
 from typing import AsyncIterator
 from pathlib import Path
@@ -19,7 +19,7 @@ from ..tools.executor import ToolExecutor
 from ..session.manager import SessionManager
 from ..session.context import SessionContext
 from ..utils.logging import logger
-from ..utils.helpers import safe_get
+from ..utils.helpers import safe_get, sync_to_async
 
 
 class StreamChunk(Struct):
@@ -76,6 +76,9 @@ class Agent:
         self.tool_registry = ToolRegistry()
         self.tool_executor = ToolExecutor(self.tool_registry)
         self._current_response = ""
+
+        # 创建异步版本的 ollama 调用
+        self._ollama_chat_async = sync_to_async(ollama.chat)
 
         self._setup()
 
@@ -150,7 +153,7 @@ class Agent:
     async def _call_model(
         self, messages: list[dict[str, str]], tools: list[dict] | None = None
     ) -> ChatResponse:
-        """调用模型"""
+        """调用模型（异步）"""
         kwargs: dict = {
             "model": self.config.model.name,
             "messages": messages,
@@ -170,14 +173,19 @@ class Agent:
             logger.debug(f"传递了 {len(tools)} 个工具到模型")
 
         try:
-            return ollama.chat(**kwargs)
+            # 使用异步版本
+            return await self._ollama_chat_async(**kwargs)
         except Exception as e:
             raise ModelError(f"模型调用失败: {e}") from e
 
     async def _call_model_stream(
         self, messages: list[dict[str, str]], tools: list[dict] | None = None
     ) -> AsyncIterator[StreamChunk]:
-        """流式调用模型，返回流式迭代器"""
+        """流式调用模型，返回流式迭代器
+
+        注意：ollama.chat 的 stream 模式返回的是生成器，不是异步生成器。
+        我们使用 sync_to_async 包装整个流式调用，但需要特殊处理。
+        """
         kwargs: dict = {
             "model": self.config.model.name,
             "messages": messages,
@@ -196,25 +204,57 @@ class Agent:
             kwargs["tools"] = tools
 
         try:
-            for chunk in ollama.chat(**kwargs):
-                if hasattr(chunk, "message"):
-                    if (
-                        hasattr(chunk.message, "tool_calls")
-                        and chunk.message.tool_calls
-                    ):
+            # ollama 的 stream 返回的是同步生成器
+            # 我们在线程池中运行整个流式处理
+            import asyncio
+            from concurrent.futures import ThreadPoolExecutor
+
+            def run_stream():
+                for chunk in ollama.chat(**kwargs):
+                    yield chunk
+
+            executor = ThreadPoolExecutor(max_workers=1)
+            loop = asyncio.get_event_loop()
+
+            # 创建一个队列来传递数据
+            queue = asyncio.Queue()
+
+            def producer():
+                try:
+                    for chunk in run_stream():
+                        loop.call_soon_threadsafe(queue.put_nowait, chunk)
+                except Exception as e:
+                    loop.call_soon_threadsafe(queue.put_nowait, e)
+                finally:
+                    loop.call_soon_threadsafe(queue.put_nowait, None)  # 结束标记
+
+            executor.submit(producer)
+
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                if isinstance(item, Exception):
+                    raise ModelError(f"流式模型调用失败: {item}") from item
+
+                if hasattr(item, "message"):
+                    if hasattr(item.message, "tool_calls") and item.message.tool_calls:
                         yield StreamChunk(
-                            is_tool_call=True, tool_info={"message": chunk.message}
+                            is_tool_call=True, tool_info={"message": item.message}
                         )
-                    elif content := getattr(chunk.message, "content", ""):
+                    elif content := getattr(item.message, "content", ""):
                         yield StreamChunk(content=content)
-                elif isinstance(chunk, dict):
-                    if message := chunk.get("message", {}):
+                elif isinstance(item, dict):
+                    if message := item.get("message", {}):
                         if message.get("tool_calls"):
                             yield StreamChunk(
                                 is_tool_call=True, tool_info={"message": message}
                             )
                         elif content := message.get("content"):
                             yield StreamChunk(content=content)
+
+            executor.shutdown(wait=False)
+
         except Exception as e:
             raise ModelError(f"流式模型调用失败: {e}") from e
 
@@ -287,19 +327,17 @@ class Agent:
             yield chunk
 
         if tool_calls_message and (
-            tool_results := await self._handle_tool_calls_from_message(tool_calls_message)
+            tool_results := await self._handle_tool_calls_from_message(
+                tool_calls_message
+            )
         ):
-            # 注意：这里不再保存 full_content（部分响应）
-            # 只记录工具结果
             self._record_tool_results(tool_results)
             self._save_working_memory_if_needed()
 
-            # 继续对话获取剩余部分
             async for chunk in self._continue_with_tool_results_stream():
                 full_content += chunk.content
                 yield chunk
 
-        # 最终只保存一次完整响应
         if full_content:
             self._record_assistant_message(full_content)
             await self._auto_memory(user_input, full_content)
@@ -367,7 +405,6 @@ class Agent:
         wm = self.working_memory
         character_name = safe_get(self.config, "character.name", "default")
 
-        # 检查是否与上一条助手消息相同
         if wm._memory.messages:
             if (last_msg := wm._memory.messages[-1])[
                 "role"
@@ -423,7 +460,7 @@ class Agent:
             importance += 0.2
 
         if importance > 0.5:
-            self.semantic_memory.add(user_input, importance)
+            await self.semantic_memory.add_async(user_input, importance)
 
     def rollback(self, turns: int = 1) -> None:
         """回滚对话"""
