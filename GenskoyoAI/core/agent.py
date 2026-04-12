@@ -8,9 +8,7 @@ import sys
 import signal as sig
 from contextvars import ContextVar
 from uuid import uuid4
-from concurrent.futures import ThreadPoolExecutor
 
-import ollama
 from ollama import AsyncClient as OllamaAsyncClient
 from ollama import Message, ChatResponse
 from msgspec import Struct
@@ -27,7 +25,7 @@ from ..tools.executor import ToolExecutor
 from ..session.manager import SessionManager
 from ..session.context import SessionContext
 from ..utils.logging import logger
-from ..utils.helpers import safe_get, sync_to_async
+from ..utils.helpers import safe_get
 from ..background import (
     BackgroundManager,
     TaskResult,
@@ -106,7 +104,7 @@ class Agent:
         self._current_response = ""
 
         # 创建异步版本的 ollama 调用
-        self._ollama_async_client = self._build_async_client()
+        self._ollama_client = self._build_async_client()
 
         # 初始化后台管理器
         self._background_manager: BackgroundManager | None = None
@@ -362,7 +360,6 @@ class Agent:
             "think": self.config.model.think,
             "messages": messages,
             "tools": tools,
-            "stream": False,
             "options": {
                 "temperature": self.config.model.temperature,
                 "top_p": self.config.model.top_p,
@@ -372,7 +369,7 @@ class Agent:
 
         try:
             return await asyncio.wait_for(
-                self._ollama_async_client.chat(**kwargs),
+                self._ollama_client.chat(**kwargs, stream=False),
                 timeout=self.config.model.timeout,
             )
         except asyncio.TimeoutError:
@@ -383,13 +380,11 @@ class Agent:
     async def _call_model_stream(
         self, messages: list[dict[str, str]], tools: list[dict] | None = None
     ) -> AsyncIterator[StreamChunk]:
-        """流式调用模型，返回流式迭代器"""
-        kwargs: dict = {
+        kwargs = {
             "model": self.config.model.name,
             "think": self.config.model.think,
             "messages": messages,
             "tools": tools,
-            "stream": True,
             "options": {
                 "temperature": self.config.model.temperature,
                 "top_p": self.config.model.top_p,
@@ -398,77 +393,49 @@ class Agent:
         }
 
         try:
-            async for chunk in await self._ollama_async_client.chat(**kwargs):
+            chat_stream = await self._ollama_client.chat(**kwargs, stream=True)
+            async for chunk in chat_stream:
                 if self._shutting_down:
                     break
-
-                if hasattr(chunk, "message"):
-                    if (
-                        hasattr(chunk.message, "tool_calls")
-                        and chunk.message.tool_calls
-                    ):
-                        yield StreamChunk(
-                            is_tool_call=True, tool_info={"message": chunk.message}
-                        )
-                    elif content := getattr(chunk.message, "content", ""):
-                        yield StreamChunk(content=content)
-                elif isinstance(chunk, dict):
-                    if message := chunk.get("message", {}):
-                        if message.get("tool_calls"):
-                            yield StreamChunk(
-                                is_tool_call=True, tool_info={"message": message}
-                            )
-                        elif content := message.get("content"):
-                            yield StreamChunk(content=content)
+                
+                message = chunk.message
+                if message.tool_calls:
+                    yield StreamChunk(is_tool_call=True, tool_info={"message": message})
+                elif message.content:
+                    yield StreamChunk(content=message.content)
 
         except Exception as e:
             raise ModelError(f"流式模型调用失败: {e}") from e
 
     # ==================== 工具处理 ====================
 
-    async def _handle_tool_calls(self, response: ChatResponse) -> list[dict] | None:
-        """处理工具调用"""
-        message = getattr(response, "message", None) or response.get("message", {})
-        tool_calls = getattr(message, "tool_calls", []) or message.get("tool_calls", [])
-
-        if not tool_calls:
+    async def _handle_tool_calls(self, resp: ChatResponse) -> list[dict] | None:
+        """处理工具调用（接受 Message 对象）"""
+        message = resp.message
+        if not message.tool_calls:
             return None
 
-        logger.info(f"检测到 {len(tool_calls)} 个工具调用")
+        logger.info(f"检测到 {len(message.tool_calls)} 个工具调用")
 
         if parsed_calls := self.tool_executor.parse_tool_calls(message):
             return await self.tool_executor.execute_batch(parsed_calls)
 
         return None
 
-    async def _handle_tool_calls_from_message(
-        self, message: Message
-    ) -> list[dict] | None:
-        """处理来自流式响应的 Message 对象的工具调用"""
-        if not (tool_calls := getattr(message, "tool_calls", [])):
-            return None
-
-        logger.info(f"检测到 {len(tool_calls)} 个工具调用")
-        for tc in tool_calls:
-            if hasattr(tc, "function"):
-                logger.info(f"工具调用: {tc.function.name}")
-
-        if parsed_calls := self.tool_executor.parse_tool_calls_from_message(message):
-            return await self.tool_executor.execute_batch(parsed_calls)
-
-        return None
-
     async def _handle_tool_chain(
-        self, partial_content: str, tool_results: list[dict]
-    ) -> str:
+        self, partial_message: Message, tool_results: list[dict]
+    ) -> Message:
         """处理工具调用链，返回完整响应"""
+        result = partial_message.content or ""
         self._record_tool_results(tool_results)
 
-        if partial_content:
-            self.working_memory.add_message("assistant", partial_content)
+        if partial_message.content:
+            self.working_memory.add_message("assistant", result)
 
         continuation = await self._continue_with_tool_results()
-        return partial_content + continuation
+        final_content = result + continuation
+        
+        return Message(role="assistant", content=final_content)
 
     async def _continue_with_tool_results(self) -> str:
         """带着工具结果继续对话"""
@@ -497,9 +464,9 @@ class Agent:
             )
         )
 
-    def _record_assistant_message(self, content: str) -> None:
+    def _record_assistant_message(self, msg: str) -> None:
         """记录助手消息（带去重保护）"""
-        if not content:
+        if not msg:
             return
 
         wm = self.working_memory
@@ -508,14 +475,14 @@ class Agent:
         if wm._memory.messages:
             if (last_msg := wm._memory.messages[-1])[
                 "role"
-            ] == "assistant" and last_msg["content"] == content:
+            ] == "assistant" and last_msg["content"] == msg:
                 logger.debug("跳过重复的助手消息记录")
                 return
 
-        self.working_memory.add_message("assistant", content)
+        self.working_memory.add_message("assistant", msg)
         self.episodic_memory.add_message(
             MemoryRecord(
-                content=content,
+                content=msg,
                 role="assistant",
                 character_id=character_name,
             )
@@ -625,10 +592,10 @@ class Agent:
 
     # ==================== 核心 API ====================
 
-    async def send(self, user_input: str) -> str:
+    async def send(self, user_input: str) -> Message | None:
         """发送消息并获取完整回复（非流式）"""
         if self._shutting_down:
-            return ""
+            return None
 
         # 使用信号量限制并发
         async with self._request_semaphore:
@@ -645,24 +612,24 @@ class Agent:
                 self._current_task = None
                 logger.debug(f"[{request_id}] 请求处理完成")
 
-    async def _do_send(self, user_input: str) -> str:
+    async def _do_send(self, user_input: str) -> Message:
         """实际执行发送逻辑"""
         self._record_user_message(user_input)
 
         tools = self.tool_registry.get_schemas() if self.config.tool.enabled else None
         messages = self._build_messages(user_input)
         response = await self._call_model(messages, tools)
-        content = response.get("message", {}).get("content", "")
+        message = response.message
 
         if tool_results := await self._handle_tool_calls(response):
-            content = await self._handle_tool_chain(content, tool_results)
+            message = await self._handle_tool_chain(message, tool_results)
 
-        if content:
-            self._record_assistant_message(content)
-            await self._auto_memory_async(user_input, content)
+        if message:
+            self._record_assistant_message(message.content or "")
+            await self._auto_memory_async(user_input, message.content or "")
 
         await self._save_async_if_needed()
-        return content
+        return message
 
     async def send_stream(self, user_input: str) -> AsyncIterator[StreamChunk]:
         """发送消息并获取流式回复迭代器"""
@@ -707,9 +674,7 @@ class Agent:
             return
 
         if tool_calls_message and (
-            tool_results := await self._handle_tool_calls_from_message(
-                tool_calls_message
-            )
+            tool_results := await self._handle_tool_calls(tool_calls_message)
         ):
             self._record_tool_results(tool_results)
 

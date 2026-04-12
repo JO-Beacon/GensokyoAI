@@ -2,7 +2,6 @@
 
 import json
 import asyncio
-from typing import Optional
 
 from ollama import Message
 
@@ -13,72 +12,28 @@ from ..utils.logging import logger
 class ToolExecutor:
     """工具执行器"""
 
-    def __init__(self, registry: Optional[ToolRegistry] = None):
+    def __init__(self, registry: ToolRegistry | None = None):
         self._registry = registry or ToolRegistry()
 
-    def parse_tool_calls(self, message: dict) -> list[dict]:
-        """从模型响应中解析工具调用"""
-        tool_calls = message.get("tool_calls", [])
-        if not tool_calls:
-            return []
-
-        parsed = []
-        for tc in tool_calls:
-            func = tc.get("function", {})
-            name = func.get("name", "")
-            args_str = func.get("arguments", "{}")
-
-            try:
-                args = json.loads(args_str) if isinstance(args_str, str) else args_str
-            except json.JSONDecodeError:
-                args = {}
-
-            parsed.append({"id": tc.get("id", ""), "name": name, "arguments": args})
-
-        return parsed
-
-    def parse_tool_calls_from_message(self, message: Message) -> list[dict]:
-        """从 Message 对象中解析工具调用"""
+    def parse_tool_calls(self, message: Message) -> list[dict]:
+        """从 Message 对象解析工具调用"""
         if not message.tool_calls:
             return []
-
+        
         parsed = []
         for tc in message.tool_calls:
-            # 处理 ollama Message 对象
-            if tc.function:
-                name = tc.function.name
-                args = tc.function.arguments
-            elif isinstance(tc, dict):
-                func = tc.get("function", {})
-                name = func.get("name", "")
-                args = func.get("arguments", {})
-            else:
-                continue
-
-            # 如果 args 是字符串，尝试解析为 JSON
-            if isinstance(args, str):
-                try:
-                    args = json.loads(args)
-                except json.JSONDecodeError:
-                    args = {}
-
-            parsed.append(
-                {
-                    "id": getattr(tc, "id", "")
-                    if hasattr(tc, "id")
-                    else tc.get("id", ""),
-                    "name": name,
-                    "arguments": args,
-                }
-            )
-
+            # ollama 的 Message.tool_calls 已经处理好了
+            # tc.function.arguments 已经是 dict，不是字符串
+            parsed.append({
+                "name": tc.function.name,
+                "arguments": tc.function.arguments,  # 直接是 dict
+            })
         return parsed
 
     async def execute(self, tool_call: dict) -> dict:
         """执行单个工具调用"""
         name = tool_call.get("name")
         arguments = tool_call.get("arguments", {})
-        call_id = tool_call.get("id", "")
 
         tool_def = self._registry.get(name)  # type: ignore
         if not tool_def:
@@ -86,9 +41,8 @@ class ToolExecutor:
             logger.warning(error_msg)
             return {
                 "role": "tool",
-                "tool_call_id": call_id,
                 "name": name,
-                "content": f"错误: {error_msg}",
+                "content": f"调用出错啦: {error_msg}",
             }
 
         try:
@@ -108,7 +62,6 @@ class ToolExecutor:
 
             return {
                 "role": "tool",
-                "tool_call_id": call_id,
                 "name": name,
                 "content": result,
             }
@@ -117,7 +70,6 @@ class ToolExecutor:
             logger.error(f"工具 {name} 执行错误: {e}")
             return {
                 "role": "tool",
-                "tool_call_id": call_id,
                 "name": name,
                 "content": f"错误: {error_msg}",
             }
@@ -132,13 +84,11 @@ class ToolExecutor:
         """同步执行（兼容非异步环境）"""
         name = tool_call.get("name")
         arguments = tool_call.get("arguments", {})
-        call_id = tool_call.get("id", "")
 
         tool_def = self._registry.get(name)  # type: ignore
         if not tool_def:
             return {
                 "role": "tool",
-                "tool_call_id": call_id,
                 "name": name,
                 "content": f"错误: 工具 '{name}' 未找到",
             }
@@ -149,14 +99,12 @@ class ToolExecutor:
                 result = json.dumps(result, ensure_ascii=False)
             return {
                 "role": "tool",
-                "tool_call_id": call_id,
                 "name": name,
                 "content": result,
             }
         except Exception as e:
             return {
                 "role": "tool",
-                "tool_call_id": call_id,
                 "name": name,
                 "content": f"错误: {e}",
             }
