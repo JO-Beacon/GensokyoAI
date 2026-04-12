@@ -8,4 +8,4 @@ numpy            # 向量计算
 pyyaml           # YAML 解析
 
 # ===== 自研高性能库（需要特定版本修复构建问题）=====
-ayafileio>=0.1.8  # 真异步文件 I/O，0.1.8 修复了 Windows 构建问题
+ayafileio>=0.2.0  # 真异步文件 I/O
