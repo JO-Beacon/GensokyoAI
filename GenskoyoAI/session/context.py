@@ -1,13 +1,12 @@
 """会话上下文"""
 
-from dataclasses import dataclass, field
+from msgspec import Struct, field
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
 
-@dataclass
-class SessionContext:
+class SessionContext(Struct):
     """会话上下文"""
 
     session_id: str = field(default_factory=lambda: str(uuid4()))

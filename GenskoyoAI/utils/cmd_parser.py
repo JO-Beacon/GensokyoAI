@@ -3,7 +3,8 @@
 import re
 from typing import Callable, Awaitable
 from enum import Enum, auto
-from dataclasses import dataclass, field
+from msgspec import field, Struct
+import inspect
 from .logging import logger
 
 
@@ -17,8 +18,7 @@ class CommandType(Enum):
     NONE = auto()  # 不是命令
 
 
-@dataclass
-class ParsedCommand:
+class ParsedCommand(Struct):
     """解析后的命令"""
 
     type: CommandType
@@ -26,6 +26,12 @@ class ParsedCommand:
     content: str = ""  # 标签内的完整内容
     args: list[str] = field(default_factory=list)
     raw: str = ""
+    
+    _tag_def: TagDefinition | None = None
+    
+    def define_tag(self, tag_def: TagDefinition) -> None:
+        """ 保存标签定义 """
+        self._tag_def = tag_def
 
     def get_text(self) -> str:
         """获取内容文本（content 或 args 拼接）"""
@@ -222,7 +228,7 @@ class CommandParser:
                     args=[content.strip()] if content else [],
                     raw=match.group(0),
                 )
-                cmd._tag_def = tag_def  # 保存标签定义以便处理
+                cmd.define_tag(tag_def) # 保存标签定义以便处理
                 commands.append(cmd)
 
         # 2. 解析前缀模式 /command args
@@ -244,7 +250,7 @@ class CommandParser:
                             args=[content] if content else [],
                             raw=line,
                         )
-                        cmd._tag_def = tag_def
+                        cmd.define_tag(tag_def)
                         commands.append(cmd)
 
         return commands
@@ -342,9 +348,8 @@ class CommandHandler:
             if handler_info := self._handlers.get(cmd.name):
                 handler, _ = handler_info
                 try:
-                    import asyncio
 
-                    if asyncio.iscoroutinefunction(handler):
+                    if inspect.iscoroutinefunction(handler):
                         result = await handler(cmd)
                     else:
                         result = handler(cmd)
