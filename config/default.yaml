@@ -32,10 +32,6 @@ memory:
 # 工具配置
 tool:
   enabled: true
-  builtin_tools:
-    - time
-    - moon
-    - system
   custom_tools_path: null
 
 # 会话配置

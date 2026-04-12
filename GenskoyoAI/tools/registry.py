@@ -6,9 +6,8 @@ import pkgutil
 from pathlib import Path
 from typing import Optional, Callable
 
-from .base import ToolDefinition, list_tools, get_tool
+from .base import ToolDefinition, list_tools, get_tool, tool
 from ..utils.logging import logger
-
 
 class ToolRegistry:
     """工具注册中心"""
@@ -18,20 +17,23 @@ class ToolRegistry:
         self._load_builtin()
 
     def _load_builtin(self) -> None:
-        """加载内置工具"""
-        from .builtin import time, moon, system
-
-        # 导入会自动触发装饰器注册
-        # 但需要确保模块被加载
-        _ = (time, moon, system)
-
-        # 从全局注册表复制
+        """自动发现并加载内置工具"""
+        
+        builtin_dir = Path(__file__).parent / "tool_builtin"
+        for py_file in builtin_dir.glob("*.py"):
+            if py_file.name.startswith("_"):
+                continue
+            module_name = py_file.stem
+            try:
+                importlib.import_module(f".tool_builtin.{module_name}", package=__package__)
+                logger.debug(f"加载内置工具: {module_name}")
+            except Exception as e:
+                logger.warning(f"加载 {module_name} 失败: {e}")
+        
         self._tools.update(list_tools())
-        logger.info(f"加载了 {len(self._tools)} 个内置工具")
 
     def register(self, func: Callable, name: Optional[str] = None) -> None:
         """注册工具（非装饰器方式）"""
-        from .base import tool
 
         decorated = tool(name=name)(func)
         self._tools[decorated.name] = decorated
