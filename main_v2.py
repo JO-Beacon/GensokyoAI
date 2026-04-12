@@ -10,7 +10,10 @@ from rich.console import Console
 from GenskoyoAI.core.agent import Agent
 from GenskoyoAI.core.config import ConfigLoader
 from GenskoyoAI.backends.console import ConsoleBackendBuilder
+from GenskoyoAI.utils.exec_hook import set_exechook
 
+# 设置全局异常钩子
+set_exechook()
 
 console = Console()
 
