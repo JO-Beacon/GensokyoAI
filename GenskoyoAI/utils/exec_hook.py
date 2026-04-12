@@ -57,7 +57,7 @@ def format_stack_trace(exctype, value, tb, max_depth=15, nested=False) -> list[s
     return exception_info
 
 
-def ExtractException(exctype, value, tb) -> list[str] | None:
+def extract_exception(exctype, value, tb) -> list[str] | None:
     # 获取回溯信息并格式化为字符串
     if all(x is None for x in (exctype, value, tb)):
         return None
@@ -69,7 +69,7 @@ def ExtractException(exctype, value, tb) -> list[str] | None:
 
 def sys_excepthook(exctype, value, tb):
     # 获取异常信息并打印到控制台
-    exception_info = ExtractException(exctype, value, tb)
+    exception_info = extract_exception(exctype, value, tb)
     if exception_info:
         for exception_element in exception_info:
             logger.critical(exception_element)
@@ -82,7 +82,7 @@ def set_exechook():
     sys.excepthook = sys_excepthook
 
 
-def GetStackTrace(vokedepth: int = 1) -> str:
+def get_stack_trace(vokedepth: int = 1) -> str:
     """
     获取堆栈跟踪信息
     """
