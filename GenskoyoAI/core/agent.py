@@ -11,6 +11,7 @@ from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
 
 import ollama
+from ollama import AsyncClient as OllamaAsyncClient
 from ollama import Message, ChatResponse
 from msgspec import Struct
 
@@ -105,7 +106,7 @@ class Agent:
         self._current_response = ""
 
         # 创建异步版本的 ollama 调用
-        self._ollama_chat_async = sync_to_async(ollama.chat)
+        self._ollama_async_client = self._build_async_client()
 
         # 初始化后台管理器
         self._background_manager: BackgroundManager | None = None
@@ -178,6 +179,10 @@ class Agent:
             prompt += "\n当需要获取外部信息时，请调用相应的工具。调用工具后，将结果整合到回复中。"
 
         return prompt
+
+    def _build_async_client(self) -> OllamaAsyncClient:
+        """构建异步客户端实例"""
+        return OllamaAsyncClient(host=self.config.model.base_url)
 
     def _create_background_manager(self) -> BackgroundManager:
         """创建后台管理器"""
@@ -356,6 +361,7 @@ class Agent:
             "model": self.config.model.name,
             "think": self.config.model.think,
             "messages": messages,
+            "tools": tools,
             "stream": False,
             "options": {
                 "temperature": self.config.model.temperature,
@@ -364,13 +370,10 @@ class Agent:
             },
         }
 
-        if tools:
-            kwargs["tools"] = tools
-            logger.debug(f"传递了 {len(tools)} 个工具到模型")
-
         try:
             return await asyncio.wait_for(
-                self._ollama_chat_async(**kwargs), timeout=self.config.model.timeout
+                self._ollama_async_client.chat(**kwargs),
+                timeout=self.config.model.timeout,
             )
         except asyncio.TimeoutError:
             raise ModelError(f"模型调用超时 ({self.config.model.timeout}s)")
@@ -385,6 +388,7 @@ class Agent:
             "model": self.config.model.name,
             "think": self.config.model.think,
             "messages": messages,
+            "tools": tools,
             "stream": True,
             "options": {
                 "temperature": self.config.model.temperature,
@@ -393,62 +397,29 @@ class Agent:
             },
         }
 
-        if tools:
-            kwargs["tools"] = tools
-
         try:
-
-            def run_stream():
-                for chunk in ollama.chat(**kwargs):
-                    if self._shutting_down:
-                        break
-                    yield chunk
-
-            executor = ThreadPoolExecutor(max_workers=1)
-            loop = asyncio.get_event_loop()
-            queue: asyncio.Queue = asyncio.Queue()
-
-            def producer():
-                try:
-                    for chunk in run_stream():
-                        loop.call_soon_threadsafe(queue.put_nowait, chunk)
-                except Exception as e:
-                    loop.call_soon_threadsafe(queue.put_nowait, e)
-                finally:
-                    loop.call_soon_threadsafe(queue.put_nowait, None)
-
-            executor.submit(producer)
-
-            while True:
-                try:
-                    item = await asyncio.wait_for(
-                        queue.get(), timeout=self.config.model.timeout
-                    )
-                except asyncio.TimeoutError:
-                    raise ModelError(f"流式模型调用超时 ({self.config.model.timeout}s)")
-
-                if item is None:
+            async for chunk in await self._ollama_async_client.chat(**kwargs):
+                if self._shutting_down:
                     break
-                if isinstance(item, Exception):
-                    raise ModelError(f"流式模型调用失败: {item}") from item
 
-                if hasattr(item, "message"):
-                    if hasattr(item.message, "tool_calls") and item.message.tool_calls:
+                if hasattr(chunk, "message"):
+                    if (
+                        hasattr(chunk.message, "tool_calls")
+                        and chunk.message.tool_calls
+                    ):
                         yield StreamChunk(
-                            is_tool_call=True, tool_info={"message": item.message}
+                            is_tool_call=True, tool_info={"message": chunk.message}
                         )
-                    elif content := getattr(item.message, "content", ""):
+                    elif content := getattr(chunk.message, "content", ""):
                         yield StreamChunk(content=content)
-                elif isinstance(item, dict):
-                    if message := item.get("message", {}):
+                elif isinstance(chunk, dict):
+                    if message := chunk.get("message", {}):
                         if message.get("tool_calls"):
                             yield StreamChunk(
                                 is_tool_call=True, tool_info={"message": message}
                             )
                         elif content := message.get("content"):
                             yield StreamChunk(content=content)
-
-            executor.shutdown(wait=False)
 
         except Exception as e:
             raise ModelError(f"流式模型调用失败: {e}") from e

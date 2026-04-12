@@ -180,16 +180,9 @@ class ConfigLoader:
             if override.log_level != LogLevel.INFO
             else base.log_level
         )
-        # 修复：正确的覆盖逻辑
         result.log_console = (
-            override.log_console if not base.log_console else base.log_console
+            override.log_console if not override.log_console else base.log_console
         )
-        # 更好的写法：
-        if hasattr(override, "log_console") and override.log_console is not None:
-            result.log_console = override.log_console
-        else:
-            result.log_console = base.log_console
-
         result.log_file = override.log_file or base.log_file
 
         # 其他配置 - override 优先
@@ -203,12 +196,12 @@ class ConfigLoader:
         return result
 
     def _merge_model(self, base: ModelConfig, override: ModelConfig) -> ModelConfig:
-        """合并模型配置"""
+        """合并模型配置 - 修复覆盖逻辑"""
         return ModelConfig(
             name=override.name if override.name != "qwen3:14b" else base.name,
             base_url=override.base_url or base.base_url,
             stream=override.stream if not override.stream else base.stream,
-            think=override.think if override.think else base.think,
+            think=override.think if override.think != base.think else base.think,
             temperature=override.temperature
             if override.temperature != 0.7
             else base.temperature,
@@ -220,7 +213,7 @@ class ConfigLoader:
         )
 
     def _merge_memory(self, base: MemoryConfig, override: MemoryConfig) -> MemoryConfig:
-        """合并记忆配置"""
+        """合并记忆配置 - 修复覆盖逻辑"""
         return MemoryConfig(
             working_max_turns=override.working_max_turns
             if override.working_max_turns != 20
@@ -235,7 +228,7 @@ class ConfigLoader:
             if override.episodic_keep_recent != 10
             else base.episodic_keep_recent,
             semantic_enabled=override.semantic_enabled
-            if not override.semantic_enabled
+            if override.semantic_enabled != base.semantic_enabled
             else base.semantic_enabled,
             semantic_embedding_model=override.semantic_embedding_model
             if override.semantic_embedding_model != "nomic-embed-text"
@@ -247,7 +240,7 @@ class ConfigLoader:
             if override.semantic_similarity_threshold != 0.7
             else base.semantic_similarity_threshold,
             auto_memory_enabled=override.auto_memory_enabled
-            if not override.auto_memory_enabled
+            if override.auto_memory_enabled != base.auto_memory_enabled
             else base.auto_memory_enabled,
             auto_memory_model=override.auto_memory_model
             if override.auto_memory_model != "qwen3:14b"
@@ -255,11 +248,13 @@ class ConfigLoader:
         )
 
     def _merge_tool(self, base: ToolConfig, override: ToolConfig) -> ToolConfig:
-        """合并工具配置"""
+        """合并工具配置 - 修复覆盖逻辑"""
         return ToolConfig(
-            enabled=override.enabled if not override.enabled else base.enabled,
+            enabled=override.enabled
+            if override.enabled != base.enabled
+            else base.enabled,
             builtin_tools=override.builtin_tools
-            if override.builtin_tools
+            if override.builtin_tools != base.builtin_tools
             else base.builtin_tools,
             custom_tools_path=override.custom_tools_path or base.custom_tools_path,
         )
@@ -267,11 +262,14 @@ class ConfigLoader:
     def _merge_session(
         self, base: SessionConfig, override: SessionConfig
     ) -> SessionConfig:
-        """合并会话配置"""
+        """合并会话配置 - 修复覆盖逻辑"""
+        default_path = Path("./sessions")
         return SessionConfig(
-            auto_save=override.auto_save if not override.auto_save else base.auto_save,
+            auto_save=override.auto_save
+            if override.auto_save != base.auto_save
+            else base.auto_save,
             save_path=override.save_path
-            if override.save_path != Path("./sessions")
+            if override.save_path != default_path
             else base.save_path,
             max_sessions=override.max_sessions
             if override.max_sessions != 100

@@ -26,11 +26,11 @@ class ParsedCommand(Struct):
     content: str = ""  # 标签内的完整内容
     args: list[str] = field(default_factory=list)
     raw: str = ""
-    
+
     _tag_def: TagDefinition | None = None
-    
+
     def define_tag(self, tag_def: TagDefinition) -> None:
-        """ 保存标签定义 """
+        """保存标签定义"""
         self._tag_def = tag_def
 
     def get_text(self) -> str:
@@ -228,7 +228,7 @@ class CommandParser:
                     args=[content.strip()] if content else [],
                     raw=match.group(0),
                 )
-                cmd.define_tag(tag_def) # 保存标签定义以便处理
+                cmd.define_tag(tag_def)  # 保存标签定义以便处理
                 commands.append(cmd)
 
         # 2. 解析前缀模式 /command args
@@ -348,7 +348,6 @@ class CommandHandler:
             if handler_info := self._handlers.get(cmd.name):
                 handler, _ = handler_info
                 try:
-
                     if inspect.iscoroutinefunction(handler):
                         result = await handler(cmd)
                     else:
