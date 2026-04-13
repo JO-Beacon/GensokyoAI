@@ -1,7 +1,7 @@
 """语义记忆 - 支持模型提取和向量检索双模式 - 异步优化版"""
 
 # GenskoyoAI\memory\semantic.py
-
+import re
 import json
 import asyncio
 from pathlib import Path
@@ -14,7 +14,7 @@ import ayafileio
 from .types import SemanticMemory
 from ..core.config import MemoryConfig
 from ..utils.logging import logger
-from ..utils.helpers import sync_to_async
+from ..core.agent.model_client import ModelClient
 
 
 class SemanticMode(Enum):
@@ -125,17 +125,20 @@ def _memory_to_dict(memory: SemanticMemory) -> dict:
 class SemanticMemoryManager:
     """语义记忆管理器 - 支持自动降级，异步优化"""
 
-    def __init__(self, config: MemoryConfig, character_id: str, base_path: Path):
+    def __init__(
+        self,
+        config: MemoryConfig,
+        character_id: str,
+        base_path: Path,
+        model_client: ModelClient,
+    ):
         self.config = config
         self.character_id = character_id
         self._store = SimpleVectorStore(base_path / f"{character_id}_semantic.json")
         self._mode = SemanticMode.UNKNOWN  # 延迟检测
         self._mode_lock = asyncio.Lock()
         self._embedding_error_logged = False
-
-        # 创建异步版本的 ollama 调用
-        self._ollama_embeddings_async = sync_to_async(ollama.embeddings)
-        self._ollama_chat_async = sync_to_async(ollama.chat)
+        self._model_client = model_client
 
     async def _ensure_mode_async(self) -> SemanticMode:
         """确保模式已检测（异步延迟检测）"""
@@ -164,7 +167,7 @@ class SemanticMemoryManager:
     async def _check_embedding_available_async(self) -> bool:
         """检测 embedding 模型是否可用（异步）"""
         try:
-            response = await self._ollama_embeddings_async(
+            response = await self._model_client.embeddings(
                 model=self.config.semantic_embedding_model, prompt="test"
             )
             return response is not None
@@ -178,7 +181,7 @@ class SemanticMemoryManager:
             return None
 
         try:
-            response = await self._ollama_embeddings_async(
+            response = await self._model_client.embeddings(
                 model=self.config.semantic_embedding_model, prompt=text
             )
             return response.embedding  # type: ignore
@@ -204,7 +207,7 @@ class SemanticMemoryManager:
 只返回 JSON，不要其他内容。"""
 
         try:
-            response = await self._ollama_chat_async(
+            response = await self._model_client.client.chat(
                 model=self.config.auto_memory_model,
                 messages=[{"role": "user", "content": prompt}],
                 stream=False,
@@ -212,8 +215,6 @@ class SemanticMemoryManager:
             )
 
             result_text = response.message.content.strip()  # type: ignore
-
-            import re
 
             json_match = re.search(r"\{.*\}", result_text, re.DOTALL)
             if json_match:

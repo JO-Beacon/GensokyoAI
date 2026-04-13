@@ -86,22 +86,26 @@ class Agent:
 
         # 初始化记忆系统
         base_path = self.config.session.save_path / "memory"
-
-        self.episodic_memory = EpisodicMemoryManager(
-            self.config.memory,
-            character_name,
-            None,
-        )
-        self.semantic_memory = SemanticMemoryManager(
-            self.config.memory, character_name, base_path
-        )
-
+        
         # 初始化工具系统
         self.tool_registry = ToolRegistry()
         self.tool_executor = ToolExecutor(self.tool_registry)
 
         # 创建模型客户端
         self._ollama_client = ModelClient(self.config.model)
+
+        self.episodic_memory = EpisodicMemoryManager(
+            self.config.memory,
+            character_name,
+            None,
+            self._ollama_client
+        )
+        self.semantic_memory = SemanticMemoryManager(
+            self.config.memory, 
+            character_name, 
+            base_path,
+            self._ollama_client
+        )
 
         # 请求管理
         self._request_semaphore = asyncio.Semaphore(1)
@@ -355,9 +359,9 @@ class Agent:
             self.save_coordinator.reset()
             return True
         return False
-    
+
     def save_session(self) -> None:
-        """ 保存当前会话 """
+        """保存当前会话"""
         self._sync_save()
 
     async def shutdown(self) -> None:

@@ -288,8 +288,8 @@ class ConsoleBackend(BaseBackend):
 
         # 构建艺术字 - 上半部分红色，下半部分白色
         art_text = Text()
-        lines = ART.strip('\n').split('\n')
-        
+        lines = ART.strip("\n").split("\n")
+
         for i, line in enumerate(lines):
             if i < 3:  # 上半部分（Gens）
                 art_text.append(line + "\n", style="bold red")
@@ -297,7 +297,7 @@ class ConsoleBackend(BaseBackend):
                 art_text.append(line + "\n", style="bold #FF6666")  # 浅红过渡
             else:  # 下半部分（AI）
                 art_text.append(line + "\n", style="bold white")
-        
+
         art_text.append(" ☯", style="bold yellow")
 
         # 构建信息内容
@@ -328,7 +328,7 @@ class ConsoleBackend(BaseBackend):
                 title="☯ 幻想乡 ☯",
                 subtitle="☯ 红白巫女为您服务 ☯",
                 border_style="red",
-                padding=(1, 2)
+                padding=(1, 2),
             )
         )
 

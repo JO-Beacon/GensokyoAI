@@ -9,14 +9,14 @@ import ollama
 
 from .types import EpisodicMemory, MemoryRecord
 from ..core.config import MemoryConfig
+from ..core.exceptions import MemorySystemError
 from ..utils.logging import logger
-from ..utils.helpers import sync_to_async
-
+from ..core.agent.model_client import ModelClient
 
 class EpisodicMemoryManager:
     """情景记忆管理器"""
 
-    def __init__(self, config: MemoryConfig, character_id: str, persistence=None):
+    def __init__(self, config: MemoryConfig, character_id: str, persistence=None, model_client: ModelClient | None = None):
         self.config = config
         self.character_id = character_id
         self._persistence = persistence
@@ -25,7 +25,7 @@ class EpisodicMemoryManager:
         self._compress_lock = asyncio.Lock()  # 防止并发压缩
 
         # 创建异步版本的 ollama.chat
-        self._ollama_chat_async = sync_to_async(ollama.chat)
+        self._ollama_client = model_client
 
         self._load()
 
@@ -169,7 +169,9 @@ class EpisodicMemoryManager:
 摘要："""
 
         try:
-            response = await self._ollama_chat_async(
+            if not self._ollama_client:
+                raise MemorySystemError("没有客户端！")
+            response = await self._ollama_client.client.chat(
                 model=self.config.episodic_summary_model,
                 messages=[{"role": "user", "content": prompt}],
                 stream=False,
@@ -188,7 +190,7 @@ class EpisodicMemoryManager:
                 events.append(m.content[:100])
         return events[-10:]
 
-    def get_relevant_context(self, query: str, max_summaries: int = 3) -> list[str]:
+    def get_relevant_context(self, max_summaries: int = 3) -> list[str]:
         """获取相关的情景记忆上下文"""
         if not self._episodes:
             return []

@@ -6,7 +6,7 @@ import asyncio
 from typing import AsyncIterator, Optional
 
 from ollama import AsyncClient as OllamaAsyncClient
-from ollama import ChatResponse
+from ollama import ChatResponse, EmbeddingsResponse
 from msgspec import Struct
 
 from ..config import ModelConfig
@@ -163,7 +163,91 @@ class ModelClient:
         self._client = self._build_client()
         logger.info(f"ModelClient 配置已更新，模型: {config.name}")
 
+    async def embeddings(
+        self,
+        prompt: str,
+        model: Optional[str] = None,
+        timeout: Optional[float] = None,
+        **kwargs,
+    ) -> EmbeddingsResponse:
+        """
+        获取文本向量
+
+        Args:
+            prompt: 要向量化的文本
+            model: 模型名称（可选，默认使用配置中的模型）
+            timeout: 超时时间（可选，默认使用配置中的超时）
+            **kwargs: 其他传递给 ollama embeddings 的参数
+
+        Returns:
+            EmbeddingsResponse: 包含 embedding 向量的响应
+
+        Raises:
+            ModelError: 调用失败或超时
+        """
+        try:
+            logger.debug(f"调用 embeddings 模型，文本长度: {len(prompt)}")
+            response = await asyncio.wait_for(
+                self._client.embeddings(
+                    model=model or self.config.name,
+                    prompt=prompt,
+                    **kwargs,
+                ),
+                timeout=timeout or self.config.timeout,
+            )
+            logger.debug(f"embeddings 响应完成，向量维度: {len(response.embedding)}")
+            return response
+
+        except asyncio.TimeoutError:
+            logger.error(f"embeddings 调用超时 ({timeout or self.config.timeout}s)")
+            raise ModelError(
+                f"embeddings 调用超时 ({timeout or self.config.timeout}秒)"
+            )
+
+        except Exception as e:
+            logger.error(f"embeddings 调用失败: {e}")
+            raise ModelError(f"embeddings 调用失败: {e}") from e
+
+    async def embeddings_batch(
+        self,
+        prompts: list[str],
+        model: Optional[str] = None,
+        timeout: Optional[float] = None,
+        **kwargs,
+    ) -> list[list[float]]:
+        """
+        批量获取文本向量（并行）
+
+        Args:
+            prompts: 要向量化的文本列表
+            model: 模型名称（可选）
+            timeout: 超时时间（可选）
+            **kwargs: 其他参数
+
+        Returns:
+            向量列表
+        """
+        tasks = [
+            self.embeddings(prompt, model, timeout, **kwargs) for prompt in prompts
+        ]
+        responses = await asyncio.gather(*tasks)
+
+        embeddings = []
+        for resp in responses:
+            if isinstance(resp, Exception):
+                logger.warning(f"批量 embeddings 中有失败: {resp}")
+                embeddings.append([])
+            else:
+                embeddings.append(resp.embedding)
+
+        return embeddings
+
     @property
     def model_name(self) -> str:
         """获取当前使用的模型名称"""
         return self.config.name
+
+    @property
+    def client(self) -> OllamaAsyncClient:
+        """模型客户端实例"""
+        return self._client

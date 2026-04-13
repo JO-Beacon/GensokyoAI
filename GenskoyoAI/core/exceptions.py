@@ -20,7 +20,7 @@ class AgentError(GenskoyoError):
     pass
 
 
-class MemoryError(GenskoyoError):
+class MemorySystemError(GenskoyoError):
     """记忆系统错误"""
 
     pass
