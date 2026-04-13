@@ -1,6 +1,6 @@
 """后台任务数据类型"""
 
-#GenskoyoAI\background\types.py
+# GenskoyoAI\background\types.py
 
 from msgspec import Struct, field
 from datetime import datetime

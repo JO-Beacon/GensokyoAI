@@ -1,6 +1,6 @@
 """后台任务模块"""
 
-#GenskoyoAI\background\__init__.py
+# GenskoyoAI\background\__init__.py
 
 from .manager import BackgroundManager
 from .workers.base import BaseWorker

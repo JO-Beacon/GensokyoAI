@@ -11,6 +11,7 @@ from typing import Optional, Callable
 from .base import ToolDefinition, list_tools, get_tool, tool
 from ..utils.logging import logger
 
+
 class ToolRegistry:
     """工具注册中心"""
 
@@ -20,18 +21,20 @@ class ToolRegistry:
 
     def _load_builtin(self) -> None:
         """自动发现并加载内置工具"""
-        
+
         builtin_dir = Path(__file__).parent / "tool_builtin"
         for py_file in builtin_dir.glob("*.py"):
             if py_file.name.startswith("_"):
                 continue
             module_name = py_file.stem
             try:
-                importlib.import_module(f".tool_builtin.{module_name}", package=__package__)
+                importlib.import_module(
+                    f".tool_builtin.{module_name}", package=__package__
+                )
                 logger.debug(f"加载内置工具: {module_name}")
             except Exception as e:
                 logger.warning(f"加载 {module_name} 失败: {e}")
-        
+
         self._tools.update(list_tools())
 
     def register(self, func: Callable, name: Optional[str] = None) -> None:

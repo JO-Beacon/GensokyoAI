@@ -1,3 +1,3 @@
-""" 记忆模块 """
+"""记忆模块"""
 
-#GenskoyoAI\memory\__init__.py
+# GenskoyoAI\memory\__init__.py

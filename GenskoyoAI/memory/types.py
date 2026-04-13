@@ -1,6 +1,6 @@
 """记忆数据类"""
 
-#GenskoyoAI\memory\types.py
+# GenskoyoAI\memory\types.py
 
 from msgspec import Struct, field
 from datetime import datetime

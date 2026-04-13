@@ -1,3 +1,3 @@
-""" 会话模块 """
+"""会话模块"""
 
-#GenskoyoAI\session\__init__.py
+# GenskoyoAI\session\__init__.py

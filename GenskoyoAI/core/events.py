@@ -1,6 +1,6 @@
 """异步事件总线"""
 
-#GenskoyoAI\core\events.py
+# GenskoyoAI\core\events.py
 
 import asyncio
 from typing import Callable, Any

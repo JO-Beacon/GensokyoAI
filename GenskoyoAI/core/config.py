@@ -1,6 +1,6 @@
 """配置管理"""
 
-#GenskoyoAI\core\config.py
+# GenskoyoAI\core\config.py
 
 import os
 from pathlib import Path

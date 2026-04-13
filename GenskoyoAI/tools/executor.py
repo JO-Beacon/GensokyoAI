@@ -21,15 +21,17 @@ class ToolExecutor:
         """从 Message 对象解析工具调用"""
         if not message.tool_calls:
             return []
-        
+
         parsed = []
         for tc in message.tool_calls:
             # ollama 的 Message.tool_calls 已经处理好了
             # tc.function.arguments 已经是 dict，不是字符串
-            parsed.append({
-                "name": tc.function.name,
-                "arguments": tc.function.arguments,  # 直接是 dict
-            })
+            parsed.append(
+                {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments,  # 直接是 dict
+                }
+            )
         return parsed
 
     async def execute(self, tool_call: dict) -> dict:

@@ -1,6 +1,6 @@
 """后台任务管理器 - 基于队列的事件驱动模式"""
 
-#GenskoyoAI\background\manager.py
+# GenskoyoAI\background\manager.py
 
 import asyncio
 from typing import Callable, Awaitable

@@ -411,7 +411,7 @@ class ConsoleBackend(BaseBackend):
 
         if response:
             return response.content or ""
-        
+
         return ""
 
     def _print_assistant_message(self, message: str) -> None:

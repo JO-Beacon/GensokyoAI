@@ -1,6 +1,6 @@
 """会话持久化"""
 
-#GenskoyoAI\session\persistence.py
+# GenskoyoAI\session\persistence.py
 
 import json
 import asyncio
