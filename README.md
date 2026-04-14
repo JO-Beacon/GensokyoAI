@@ -16,6 +16,7 @@
 > 一个专为角色扮演设计的异步 AI 对话框架，提供完整的三层记忆系统、会话管理、工具调用和可扩展后端。让你与自己喜欢的角色进行深度、连贯的对话。
 
 [![GensokyoAI Demo](https://via.placeholder.com/800x400/ffb6c1/ffffff?text=GensokyoAI+Console+Demo)](https://github.com/Patchouli-CN/GensokyoAI)
+[![GenskoyoAI Demo](https://via.placeholder.com/800x400/ffb6c1/ffffff?text=GenskoyoAI+Console+Demo)](https://github.com/Patchouli-CN/GenskoyoAI)
 
 ## ✨ 核心特性
 
