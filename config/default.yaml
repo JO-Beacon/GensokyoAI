@@ -1,14 +1,14 @@
-# GenskoyoAI 默认配置
+# GensokyoAI 默认配置
 
 # 日志配置
 log_level: DEBUG
 log_console: false
-log_file: "logs/genskoyai.log"
+log_file: "logs/GENSOKYOAI.log"
 
 # 模型配置
 model:
   name: qwen3.5:9b
-  base_url: null
+  base_url: "http://127.0.0.1:11434"
   stream: true
   think: false
   temperature: 0.7
@@ -23,7 +23,7 @@ memory:
   episodic_summary_model: qwen3.5:9b
   episodic_keep_recent: 10
   semantic_enabled: true
-  semantic_embedding_model: qwen3.5:9b
+  semantic_embedding_model: nomic-embed-text:latest
   semantic_top_k: 5
   semantic_similarity_threshold: 0.7
   auto_memory_enabled: true

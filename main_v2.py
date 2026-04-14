@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GenskoyoAI CLI 入口 - 极简版"""
+"""GensokyoAI CLI 入口 - 极简版"""
 
 import asyncio
 import argparse
@@ -7,10 +7,10 @@ from pathlib import Path
 
 from rich.console import Console
 
-from GenskoyoAI.core.agent import Agent
-from GenskoyoAI.core.config import ConfigLoader
-from GenskoyoAI.backends.console import ConsoleBackendBuilder
-from GenskoyoAI.utils.exec_hook import set_exechook
+from GensokyoAI.core.agent import Agent
+from GensokyoAI.core.config import ConfigLoader
+from GensokyoAI.backends.console import ConsoleBackendBuilder
+from GensokyoAI.utils.exec_hook import set_exechook
 
 # 设置全局异常钩子
 set_exechook()
@@ -20,7 +20,7 @@ console = Console()
 
 def parse_args():
     """解析命令行参数"""
-    parser = argparse.ArgumentParser(description="GenskoyoAI - 幻想乡 AI 角色扮演引擎")
+    parser = argparse.ArgumentParser(description="GensokyoAI - 幻想乡 AI 角色扮演引擎")
 
     parser.add_argument("--new-session", action="store_true", help="创建新会话")
     parser.add_argument("--resume", type=str, metavar="SESSION_ID", help="恢复指定会话")

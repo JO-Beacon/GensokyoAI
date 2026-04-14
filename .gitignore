@@ -10,3 +10,7 @@ ignore/
 sessions/
 
 logs/
+
+# UV
+.venv/
+uv.lock
