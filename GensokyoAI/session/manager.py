@@ -36,6 +36,12 @@ class SessionManager:
                     wm.add_message(msg["role"], msg["content"])
                 self._working_memories[sess.session_id] = wm
         logger.info(f"加载了 {len(self._sessions)} 个历史会话")
+        
+        # 🆕 设置 _current_session_id 为最近活跃的会话
+        if self._sessions:
+            latest = max(self._sessions.values(), key=lambda s: s.last_active)
+            self._current_session_id = latest.session_id
+            logger.debug(f"恢复最近会话: {latest.session_id[:8]}...")
 
     def create_session(self) -> SessionContext:
         """创建新会话"""

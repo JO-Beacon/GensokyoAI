@@ -89,15 +89,31 @@ async def main():
     # 处理会话恢复/创建
     if args.resume:
         if agent.resume_session(args.resume):
-            console.print(f"[green]已恢复会话: {args.resume[:8]}...[/]")
+            console.print(f"[green]✓ 已恢复会话: {args.resume[:8]}...[/]")
         else:
-            console.print(f"[red]会话不存在: {args.resume}[/]")
+            console.print(f"[red]✗ 会话不存在: {args.resume}[/]")
             return
     elif args.new_session:
-        # 🔧 只有显式指定 --new-session 时才创建新会话
-        agent.create_session()
-        console.print("[green]已创建新会话[/]")
-    # 否则使用 Agent 初始化时自动创建/加载的会话
+        # 🔧 检查当前会话是否为空会话（可复用）
+        current = agent.session_manager.get_current_session()
+        if current and current.total_turns == 0:
+            # 复用 Agent 初始化时创建的空会话
+            console.print(f"[green]✓ 新会话已就绪: {current.session_id[:8]}...[/]")
+        else:
+            # 当前会话有内容或无会话，需要创建新的
+            session = agent.create_session()
+            console.print(f"[green]✓ 已创建新会话: {session.session_id[:8]}...[/]")
+    else:
+        # 🔧 无 flag 时，显示恢复或创建的会话信息
+        current = agent.session_manager.get_current_session()
+        if current:
+            if current.total_turns > 0:
+                console.print(
+                    f"[green]✓ 已恢复历史会话: {current.session_id[:8]}... "
+                    f"({current.total_turns} 轮)[/]"
+                )
+            else:
+                console.print(f"[green]✓ 新会话已就绪: {current.session_id[:8]}...[/]")
 
     # 构建并运行控制台后端
     backend = (

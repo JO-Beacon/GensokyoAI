@@ -83,10 +83,14 @@ class Agent:
             character_name,
             working_max_turns=self.config.memory.working_max_turns,
         )
-
-        # 🆕 确保有当前会话（如果没有则创建一个）
-        if not self.session_manager.get_current_session():
-            self.session_manager.create_session()
+        
+        current_session = self.session_manager.get_current_session()
+        if not current_session:
+            session = self.session_manager.create_session()
+            logger.debug(f"Agent 初始化时自动创建新会话: {session.session_id[:8]}...")
+        else:
+            current = self.session_manager.get_current_session()
+            logger.debug(f"Agent 初始化时恢复会话: {current_session.session_id[:8]}... (轮数: {current_session.total_turns})")
 
         # 初始化记忆系统
         base_path = self.config.session.save_path / "memory"
